@@ -188,8 +188,16 @@ export function createTerrain() {
 
     for (let i = 0; i < pos.count; i++) {
         const x = pos.getX(i);
-        const z = pos.getY(i);
-        pos.setZ(i, terrainHeight(x, z));
+
+        // PlaneGeometry is rotated -90 degrees around X below.
+        // After that rotation its local +Y becomes world -Z, so sample
+        // terrainHeight using the final WORLD z coordinate. Without this
+        // sign flip, props placed with terrainHeight(x, z) were aligned to
+        // a different height field than the visible ground and appeared to
+        // float high above the terrain.
+        const worldZ = -pos.getY(i);
+
+        pos.setZ(i, terrainHeight(x, worldZ));
     }
     geo.computeVertexNormals();
 
