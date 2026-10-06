@@ -162,7 +162,9 @@ function addMountainCluster(group, material, cx, cz, count, radius, heightScale)
         const geo = makeIrregularPeak(9 + Math.random() * 15, h, 8 + Math.floor(Math.random() * 4));
         const mesh = new THREE.Mesh(geo, material);
 
-        mesh.position.set(x, terrainHeight(x, z) + h * 0.48 - 2.5, z);
+        geo.computeBoundingBox();
+        const baseY = geo.boundingBox?.min.y ?? (-h * 0.5);
+        mesh.position.set(x, terrainHeight(x, z) - baseY, z);
         mesh.rotation.y = Math.random() * Math.PI;
         mesh.scale.x *= 0.85 + Math.random() * 0.55;
         mesh.scale.z *= 0.85 + Math.random() * 0.55;
@@ -220,19 +222,9 @@ export function createTerrain() {
     addMountainCluster(group, cliffMaterial, -132, 8, 5, 30, 46);
     addMountainCluster(group, cliffMaterial, 132, 15, 5, 32, 48);
 
-    // Snow caps for the most distant peaks.
-    const snowSpecs = [
-        [-124, 54, -128, 30],
-        [-88, 48, -150, 26],
-        [118, 58, -136, 32],
-        [78, 50, -154, 25]
-    ];
-    for (const [x, y, z, r] of snowSpecs) {
-        const s = new THREE.Mesh(enableAO(new THREE.CircleGeometry(r, 56)), snowMaterial);
-        s.rotation.x = -Math.PI / 2;
-        s.position.set(x, y, z);
-        group.add(s);
-    }
+    // Snow will be added later as a slope/height material blend.
+    // The previous horizontal CircleGeometry snow caps were visibly
+    // floating in the sky when viewed from below, so they are removed.
 
     return group;
 }
