@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import "./style.css";
-import { createTerrain } from "./world/Terrain.js";
+import { createTerrain, terrainHeight } from "./world/Terrain.js";
 import { createEnvironment } from "./world/Environment.js";
 import { createWater } from "./world/Water.js";
 
@@ -11,7 +11,7 @@ import { createWater } from "./world/Water.js";
 const scene = new THREE.Scene();
 
 scene.background = new THREE.Color(0x9bbbd0);
-scene.fog = new THREE.FogExp2(0x9bbbd0, 0.0045);
+scene.fog = new THREE.FogExp2(0x9bbbd0, 0.0033);
 
 // =====================================================
 // CAMERA
@@ -24,7 +24,7 @@ const camera = new THREE.PerspectiveCamera(
     1500
 );
 
-camera.position.set(34, 42, 48);
+camera.position.set(38, 48, 54);
 
 // =====================================================
 // RENDERER
@@ -147,7 +147,7 @@ player.add(sword);
 
 player.position.set(
     0,
-    3,
+    terrainHeight(0, 45) + 1.8,
     45
 );
 
@@ -209,6 +209,8 @@ function updatePlayer() {
     player.position.x += dx;
     player.position.z += dz;
 
+    player.position.y = terrainHeight(player.position.x, player.position.z) + 1.8;
+
     if (
         dx !== 0 ||
         dz !== 0
@@ -228,9 +230,9 @@ function updatePlayer() {
 
 const cameraOffset =
     new THREE.Vector3(
-        20,
-        24,
-        26
+        22,
+        28,
+        30
     );
 
 function updateCamera() {
@@ -249,8 +251,8 @@ function updateCamera() {
 
     camera.lookAt(
         player.position.x,
-        player.position.y + 2,
-        player.position.z
+        player.position.y + 2.5,
+        player.position.z - 4
     );
 }
 
