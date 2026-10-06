@@ -24,7 +24,7 @@ const camera = new THREE.PerspectiveCamera(
     1500
 );
 
-camera.position.set(38, 48, 54);
+camera.position.set(34, 44, 60);
 
 // =====================================================
 // RENDERER
@@ -230,9 +230,9 @@ function updatePlayer() {
 
 const cameraOffset =
     new THREE.Vector3(
-        22,
-        28,
-        30
+        20,
+        25,
+        34
     );
 
 function updateCamera() {
@@ -251,8 +251,8 @@ function updateCamera() {
 
     camera.lookAt(
         player.position.x,
-        player.position.y + 2.5,
-        player.position.z - 4
+        player.position.y + 4,
+        player.position.z - 12
     );
 }
 
