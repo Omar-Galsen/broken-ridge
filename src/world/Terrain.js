@@ -2,75 +2,115 @@ import * as THREE from "three";
 
 const loader = new THREE.TextureLoader();
 
-function makeTexturedMaterial(path, fallbackColor, repeatX, repeatY, options = {}) {
+function configureTexture(texture, repeatX, repeatY, srgb = false) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(repeatX, repeatY);
+    if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+function loadPBRMaterial(basePath, fallbackColor, repeatX, repeatY, options = {}) {
     const material = new THREE.MeshStandardMaterial({
         color: fallbackColor,
-        roughness: options.roughness ?? 0.95,
+        roughness: options.roughness ?? 0.9,
         metalness: options.metalness ?? 0
     });
 
-    loader.load(
-        path,
-        (texture) => {
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(repeatX, repeatY);
-            texture.colorSpace = THREE.SRGBColorSpace;
+    const name = basePath.split("/").filter(Boolean).pop();
+    const maps = {
+        map: [`${basePath}/${name}_albedo.png`, true],
+        normalMap: [`${basePath}/${name}_normal.png`, false],
+        roughnessMap: [`${basePath}/${name}_roughness.png`, false],
+        aoMap: [`${basePath}/${name}_ao.png`, false],
+        bumpMap: [`${basePath}/${name}_height.png`, false]
+    };
 
-            material.map = texture;
-            material.color.set(0xffffff);
-            material.needsUpdate = true;
-        },
-        undefined,
-        () => {
-            console.warn(`Terrain texture not found yet: ${path}`);
-        }
-    );
+    for (const [slot, [path, srgb]] of Object.entries(maps)) {
+        loader.load(
+            path,
+            (texture) => {
+                configureTexture(texture, repeatX, repeatY, srgb);
+                material[slot] = texture;
+
+                if (slot === "map") material.color.set(0xffffff);
+                if (slot === "bumpMap") material.bumpScale = options.bumpScale ?? 0.55;
+
+                material.needsUpdate = true;
+            },
+            undefined,
+            () => console.warn(`PBR texture missing: ${path}`)
+        );
+    }
 
     return material;
+}
+
+function enableAO(geometry) {
+    if (!geometry.attributes.uv2 && geometry.attributes.uv) {
+        geometry.setAttribute(
+            "uv2",
+            new THREE.BufferAttribute(geometry.attributes.uv.array, 2)
+        );
+    }
+    return geometry;
 }
 
 export function createTerrain() {
     const group = new THREE.Group();
     group.name = "BrokenRidgeTerrain";
 
-    const grassMaterial = makeTexturedMaterial(
-        "/assets/terrain/grass/grass_texture.png",
+    const grassMaterial = loadPBRMaterial(
+        "/assets/materials/grass_meadow",
         0x4f6d36,
-        26,
-        26
+        28,
+        28,
+        { bumpScale: 0.35 }
     );
 
-    const dirtMaterial = makeTexturedMaterial(
-        "/assets/terrain/dirt/dirt_road_texture.png",
+    const dirtMaterial = loadPBRMaterial(
+        "/assets/materials/dirt_road",
         0x795d3e,
-        4,
-        36
+        5,
+        36,
+        { bumpScale: 0.5 }
     );
 
-    const rockMaterial = makeTexturedMaterial(
-        "/assets/terrain/rock/rock_ground_texture.png",
+    const rockMaterial = loadPBRMaterial(
+        "/assets/materials/rock_ground",
         0x716b62,
-        8,
-        8
+        10,
+        10,
+        { bumpScale: 0.8 }
     );
 
-    const cliffMaterial = makeTexturedMaterial(
-        "/assets/terrain/cliffs/rock_cliff_texture.png",
+    const cliffMaterial = loadPBRMaterial(
+        "/assets/materials/cliff_rock",
         0x665f58,
-        4,
-        5
+        5,
+        7,
+        { bumpScale: 1.2 }
     );
 
-    const snowMaterial = makeTexturedMaterial(
-        "/assets/terrain/snow/snow_texture.png",
+    const mountainMaterial = loadPBRMaterial(
+        "/assets/materials/mountain_rock",
+        0x5e5b58,
+        5,
+        7,
+        { bumpScale: 1.35 }
+    );
+
+    const snowMaterial = loadPBRMaterial(
+        "/assets/materials/snow",
         0xe8eef3,
-        8,
-        8,
-        { roughness: 0.82 }
+        9,
+        9,
+        { roughness: 0.78, bumpScale: 0.42 }
     );
 
-    const terrainGeometry = new THREE.PlaneGeometry(220, 220, 180, 180);
+    const terrainGeometry = enableAO(
+        new THREE.PlaneGeometry(220, 220, 180, 180)
+    );
     const positions = terrainGeometry.attributes.position;
 
     for (let i = 0; i < positions.count; i++) {
@@ -82,16 +122,10 @@ export function createTerrain() {
             Math.cos(y * 0.045) * 2.5 +
             Math.sin((x + y) * 0.026) * 3.5;
 
-        // Stronger ridges on both sides of the valley.
         height += Math.pow(Math.abs(x) / 37, 2) * 17;
-
-        // Raise the far side into a mountain wall.
         height += Math.max(0, (-y - 28) / 11) * 2.1;
 
-        // Keep the central route relatively playable.
-        if (Math.abs(x) < 10) {
-            height *= 0.22;
-        }
+        if (Math.abs(x) < 10) height *= 0.22;
 
         positions.setZ(i, height);
     }
@@ -103,31 +137,29 @@ export function createTerrain() {
     terrain.receiveShadow = true;
     group.add(terrain);
 
-    // Main dirt trail.
-    const road = new THREE.Mesh(
-        new THREE.PlaneGeometry(11, 185, 8, 80),
-        dirtMaterial
+    const roadGeometry = enableAO(
+        new THREE.PlaneGeometry(11, 185, 8, 80)
     );
+    const road = new THREE.Mesh(roadGeometry, dirtMaterial);
     road.rotation.x = -Math.PI / 2;
     road.position.set(0, 0.18, -3);
     road.receiveShadow = true;
     group.add(road);
 
-    // Rocky mountain walls.
     const cliffSpecs = [
-        [-31, -8, 18, 20, 42],
-        [34, -20, 22, 25, 45],
-        [-44, -63, 25, 30, 34],
-        [47, -77, 28, 34, 40],
-        [-54, 44, 22, 22, 35],
-        [55, 30, 24, 26, 38]
+        [-31, -8, 18, 20, 42, cliffMaterial],
+        [34, -20, 22, 25, 45, cliffMaterial],
+        [-44, -63, 25, 30, 34, mountainMaterial],
+        [47, -77, 28, 34, 40, mountainMaterial],
+        [-54, 44, 22, 22, 35, cliffMaterial],
+        [55, 30, 24, 26, 38, cliffMaterial]
     ];
 
-    for (const [x, z, sx, sy, sz] of cliffSpecs) {
-        const cliff = new THREE.Mesh(
-            new THREE.BoxGeometry(sx, sy, sz, 4, 5, 4),
-            cliffMaterial
+    for (const [x, z, sx, sy, sz, mat] of cliffSpecs) {
+        const geometry = enableAO(
+            new THREE.BoxGeometry(sx, sy, sz, 6, 8, 6)
         );
+        const cliff = new THREE.Mesh(geometry, mat);
 
         cliff.position.set(x, sy / 2 - 1, z);
         cliff.rotation.y = (x + z) * 0.007;
@@ -136,17 +168,16 @@ export function createTerrain() {
         group.add(cliff);
     }
 
-    // Scatter real textured rock shapes across the valley.
-    for (let i = 0; i < 55; i++) {
+    for (let i = 0; i < 70; i++) {
         const x = (Math.random() - 0.5) * 185;
         const z = (Math.random() - 0.5) * 185;
 
         if (Math.abs(x) < 9) continue;
 
-        const rock = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(0.8 + Math.random() * 2.1, 1),
-            rockMaterial
+        const geometry = enableAO(
+            new THREE.DodecahedronGeometry(0.8 + Math.random() * 2.1, 1)
         );
+        const rock = new THREE.Mesh(geometry, rockMaterial);
 
         rock.position.set(x, 1 + Math.random() * 1.2, z);
         rock.scale.set(
@@ -157,11 +188,9 @@ export function createTerrain() {
         rock.rotation.set(Math.random(), Math.random(), Math.random());
         rock.castShadow = true;
         rock.receiveShadow = true;
-
         group.add(rock);
     }
 
-    // Distant snow caps.
     const snowPatches = [
         [-58, 18, -84, 38, 26],
         [56, 21, -90, 42, 30],
@@ -170,10 +199,10 @@ export function createTerrain() {
     ];
 
     for (const [x, y, z, width, depth] of snowPatches) {
-        const snow = new THREE.Mesh(
-            new THREE.PlaneGeometry(width, depth),
-            snowMaterial
+        const geometry = enableAO(
+            new THREE.PlaneGeometry(width, depth, 16, 16)
         );
+        const snow = new THREE.Mesh(geometry, snowMaterial);
 
         snow.rotation.x = -Math.PI / 2;
         snow.position.set(x, y, z);
