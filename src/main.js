@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import "./style.css";
 import { createTerrain } from "./world/Terrain.js";
+import { createEnvironment } from "./world/Environment.js";
+import { createWater } from "./world/Water.js";
 
 // =====================================================
 // SCENE
@@ -76,6 +78,12 @@ scene.add(sun);
 const terrain = createTerrain();
 scene.add(terrain);
 
+const environment = createEnvironment();
+scene.add(environment);
+
+const water = createWater();
+scene.add(water.group);
+
 
 // =====================================================
 // PLAYER
@@ -146,170 +154,8 @@ player.position.set(
 scene.add(player);
 
 // =====================================================
-// TREES
-// =====================================================
-
-const trees =
-    new THREE.Group();
-
-function createTree(
-    x,
-    z,
-    scale = 1
-) {
-
-    const trunk =
-        new THREE.Mesh(
-
-            new THREE.CylinderGeometry(
-                0.25 * scale,
-                0.35 * scale,
-                3 * scale,
-                8
-            ),
-
-            new THREE.MeshStandardMaterial({
-                color:
-                    0x53391f
-            })
-        );
-
-    const crown =
-        new THREE.Mesh(
-
-            new THREE.ConeGeometry(
-                2 * scale,
-                6 * scale,
-                8
-            ),
-
-            new THREE.MeshStandardMaterial({
-                color:
-                    0x21482a
-            })
-        );
-
-    trunk.position.y =
-        1.5 * scale;
-
-    crown.position.y =
-        5 * scale;
-
-    const tree =
-        new THREE.Group();
-
-    tree.add(trunk);
-    tree.add(crown);
-
-    tree.position.set(
-        x,
-        0,
-        z
-    );
-
-    trees.add(tree);
-}
-
-// forests mostly outside road
-
-for (
-    let i = 0;
-    i < 150;
-    i++
-) {
-
-    let x =
-        (Math.random() - 0.5) *
-        190;
-
-    let z =
-        (Math.random() - 0.5) *
-        190;
-
-    if (
-        Math.abs(x) < 13
-    ) {
-        continue;
-    }
-
-    createTree(
-        x,
-        z,
-        0.7 +
-        Math.random()
-    );
-}
-
-scene.add(trees);
-
-// =====================================================
-// RUINS
-// =====================================================
-
-function createRuin(
-    x,
-    z,
-    height
-) {
-
-    const ruin =
-        new THREE.Mesh(
-
-            new THREE.BoxGeometry(
-                3,
-                height,
-                3
-            ),
-
-            new THREE.MeshStandardMaterial({
-                color:
-                    0x777268,
-                roughness:
-                    1
-            })
-        );
-
-    ruin.position.set(
-        x,
-        height / 2,
-        z
-    );
-
-    ruin.rotation.y =
-        Math.random();
-
-    ruin.castShadow =
-        true;
-
-    ruin.receiveShadow =
-        true;
-
-    scene.add(ruin);
-}
-
-for (
-    let z = 20;
-    z > -70;
-    z -= 18
-) {
-
-    createRuin(
-        -14,
-        z,
-        3 +
-        Math.random() * 5
-    );
-
-    createRuin(
-        14,
-        z,
-        3 +
-        Math.random() * 5
-    );
-}
-
-// =====================================================
 // INPUT
+// =====================================================
 // =====================================================
 
 const keys = {};
@@ -412,11 +258,16 @@ function updateCamera() {
 // GAME LOOP
 // =====================================================
 
+const clock = new THREE.Clock();
+
 function animate() {
 
     requestAnimationFrame(
         animate
     );
+
+    const delta = clock.getDelta();
+    water.update(delta);
 
     updatePlayer();
 
