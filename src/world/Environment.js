@@ -187,6 +187,56 @@ function createAncientGate(stone,moss,scale=1) {
     return g;
 }
 
+
+function createFenceLine(group, woodMaterial, z, side, count=8, spacing=6) {
+    const center = roadCenter(z);
+    for (let i=0;i<count;i++) {
+        const zz = z - i*spacing;
+        const xx = roadCenter(zz) + side*10.5;
+        const post = new THREE.Mesh(
+            enableAO(new THREE.CylinderGeometry(0.18,0.22,2.2,8)),
+            woodMaterial
+        );
+        post.position.set(xx, terrainHeight(xx,zz)+1.1, zz);
+        post.castShadow = true;
+        group.add(post);
+
+        if (i < count-1) {
+            const nextZ = z - (i+1)*spacing;
+            const nextX = roadCenter(nextZ) + side*10.5;
+            const railLen = Math.hypot(nextX-xx, nextZ-zz);
+            const rail = new THREE.Mesh(
+                enableAO(new THREE.BoxGeometry(railLen,0.18,0.18)),
+                woodMaterial
+            );
+            rail.position.set((xx+nextX)/2, terrainHeight((xx+nextX)/2,(zz+nextZ)/2)+1.3, (zz+nextZ)/2);
+            rail.rotation.y = -Math.atan2(nextZ-zz,nextX-xx);
+            rail.castShadow = true;
+            group.add(rail);
+        }
+    }
+}
+
+function createTorch(group, x, z) {
+    const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08,0.1,2.4,8),
+        new THREE.MeshStandardMaterial({color:0x3b2a1a,roughness:0.95})
+    );
+    pole.position.set(x,terrainHeight(x,z)+1.2,z);
+    group.add(pole);
+
+    const flame = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2,10,10),
+        new THREE.MeshBasicMaterial({color:0xff9a2f})
+    );
+    flame.position.set(x,terrainHeight(x,z)+2.5,z);
+    group.add(flame);
+
+    const light = new THREE.PointLight(0xff8a33, 8, 18, 2);
+    light.position.copy(flame.position);
+    group.add(light);
+}
+
 export function createEnvironment() {
     const group=new THREE.Group();
     group.name="BrokenRidgeEnvironment";
@@ -196,6 +246,7 @@ export function createEnvironment() {
     const stone=loadPBRMaterial("/assets/materials/ruin_stone",0x777268,3,3,{bumpScale:0.75});
     const moss=loadPBRMaterial("/assets/materials/moss",0x4f662d,5,5,{bumpScale:0.32});
     const rock=loadPBRMaterial("/assets/materials/rock_ground",0x6f6a63,5,5,{bumpScale:0.65});
+    const wood=loadPBRMaterial("/assets/materials/pine_bark",0x5a3a24,2,5,{bumpScale:0.45});
 
     // Dense forests at edges, scattered trees in the middle distance.
     for (let i=0;i<320;i++) {
@@ -253,9 +304,19 @@ export function createEnvironment() {
     bridge.rotation.y=0.1;
     group.add(bridge);
 
+    // Roadside composition: fences, torches, and landmark rhythm.
+    createFenceLine(group,wood,58,1,9,6);
+    createFenceLine(group,wood,58,-1,7,6);
+    createFenceLine(group,wood,-12,1,6,6);
+
+    for (const [z,side] of [[40,1],[18,-1],[-8,1],[-38,-1],[-72,1]]) {
+        const x=roadCenter(z)+side*8.5;
+        createTorch(group,x,z);
+    }
+
     // Monumental ancient gate / castle destination.
-    const gate=createAncientGate(stone,moss,1.35);
-    gate.position.set(roadCenter(-122),terrainHeight(roadCenter(-122),-122),-122);
+    const gate=createAncientGate(stone,moss,0.92);
+    gate.position.set(roadCenter(-152),terrainHeight(roadCenter(-152),-152),-152);
     gate.rotation.y=0.02;
     group.add(gate);
 
