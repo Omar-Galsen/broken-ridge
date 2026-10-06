@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { TransformControls } from "three/addons/controls/TransformControls.js";
 import "./style.css";
 import { createTerrain, terrainHeight } from "./world/Terrain.js";
 import { createEnvironment } from "./world/Environment.js";
@@ -95,16 +94,9 @@ let selectedItem = null;
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-const transformControls = new TransformControls(camera, renderer.domElement);
-transformControls.setMode("translate");
-transformControls.setSize(0.8);
-
-const transformHelper = transformControls.getHelper();
-scene.add(transformHelper);
-
-transformControls.addEventListener("dragging-changed", (event) => {
-    renderer.domElement.style.cursor = event.value ? "grabbing" : "crosshair";
-});
+const selectionBox = new THREE.BoxHelper(undefined, 0xffd54a);
+selectionBox.visible = false;
+scene.add(selectionBox);
 
 const editorPanel = document.createElement("div");
 editorPanel.style.cssText = [
@@ -119,7 +111,7 @@ editorPanel.style.cssText = [
     "border:1px solid rgba(255,255,255,.2)",
     "border-radius:8px",
     "display:none",
-    "pointer-events:none",
+    "pointer-events:auto",
     "white-space:pre"
 ].join(";");
 document.body.appendChild(editorPanel);
@@ -168,29 +160,71 @@ function refreshEditorPanel() {
 
     editorPanel.style.display = "block";
 
-    const p = selectedItem?.position;
-    const r = selectedItem?.rotation;
-    const s = selectedItem?.scale;
+    if (!selectedItem) {
+        editorPanel.innerHTML = `
+            <b>EDIT MODE</b><br>
+            Click an object to select it.<br><br>
+            Arrow keys = move X/Z<br>
+            PageUp/PageDown = move Y<br>
+            R/F = rotate Y<br>
+            + / - = scale<br>
+            G = snap to terrain<br>
+            P = export JSON<br>
+            E = exit editor
+        `;
+        return;
+    }
 
-    editorPanel.textContent = selectedItem
-        ? `EDIT MODE
-Selected: ${selectedItem.userData.itemId}
-Type: ${selectedItem.userData.itemType}
-Position: ${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}
-Rotation: ${r.x.toFixed(2)}, ${r.y.toFixed(2)}, ${r.z.toFixed(2)}
-Scale: ${s.x.toFixed(2)}, ${s.y.toFixed(2)}, ${s.z.toFixed(2)}
+    const p = selectedItem.position;
+    const r = selectedItem.rotation;
+    const s = selectedItem.scale;
 
-Click = select
-1 = move   2 = rotate   3 = scale
-G = snap Y to terrain
-P = export JSON
-E = exit editor`
-        : `EDIT MODE
-Click an object to select it.
+    editorPanel.innerHTML = `
+        <b>EDIT MODE</b><br>
+        Selected: ${selectedItem.userData.itemId}<br>
+        Type: ${selectedItem.userData.itemType}<br><br>
 
-1 = move   2 = rotate   3 = scale
-P = export JSON
-E = exit editor`;
+        X <input id="ed-x" type="number" step="0.25" value="${p.x.toFixed(2)}" style="width:72px">
+        Y <input id="ed-y" type="number" step="0.25" value="${p.y.toFixed(2)}" style="width:72px">
+        Z <input id="ed-z" type="number" step="0.25" value="${p.z.toFixed(2)}" style="width:72px"><br>
+
+        RotY <input id="ed-ry" type="number" step="0.05" value="${r.y.toFixed(2)}" style="width:72px">
+        Scale <input id="ed-s" type="number" step="0.05" value="${s.x.toFixed(2)}" style="width:72px"><br><br>
+
+        <button id="ed-apply">Apply</button>
+        <button id="ed-ground">Ground</button>
+        <button id="ed-export">Export JSON</button><br><br>
+
+        Arrow keys = move X/Z<br>
+        PageUp/PageDown = move Y<br>
+        R/F = rotate Y<br>
+        + / - = scale<br>
+        G = snap to terrain<br>
+        P = export JSON<br>
+        E = exit editor
+    `;
+
+    editorPanel.querySelector("#ed-apply")?.addEventListener("click", () => {
+        selectedItem.position.set(
+            Number(editorPanel.querySelector("#ed-x").value),
+            Number(editorPanel.querySelector("#ed-y").value),
+            Number(editorPanel.querySelector("#ed-z").value)
+        );
+        selectedItem.rotation.y = Number(editorPanel.querySelector("#ed-ry").value);
+        const scale = Number(editorPanel.querySelector("#ed-s").value);
+        selectedItem.scale.setScalar(scale);
+        selectedItem.updateMatrixWorld(true);
+        selectionBox.setFromObject(selectedItem);
+        refreshEditorPanel();
+    });
+
+    editorPanel.querySelector("#ed-ground")?.addEventListener("click", () => {
+        snapSelectedToTerrain();
+    });
+
+    editorPanel.querySelector("#ed-export")?.addEventListener("click", () => {
+        exportLayoutJSON();
+    });
 }
 
 function editableRoot(object) {
@@ -206,10 +240,12 @@ function editableRoot(object) {
 
 function selectEditable(object) {
     selectedItem = object;
-    transformControls.detach();
 
     if (selectedItem) {
-        transformControls.attach(selectedItem);
+        selectionBox.setFromObject(selectedItem);
+        selectionBox.visible = true;
+    } else {
+        selectionBox.visible = false;
     }
 
     refreshEditorPanel();
@@ -282,7 +318,7 @@ function exportLayoutJSON() {
 window.exportBrokenRidgeLayout = exportLayoutJSON;
 
 renderer.domElement.addEventListener("pointerdown", (event) => {
-    if (!editMode || transformControls.dragging) return;
+    if (!editMode) return;
 
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -391,11 +427,33 @@ window.addEventListener(
         }
 
         if (editMode) {
-            if (key === "1") transformControls.setMode("translate");
-            if (key === "2") transformControls.setMode("rotate");
-            if (key === "3") transformControls.setMode("scale");
-            if (key === "g") snapSelectedToTerrain();
+            if (selectedItem) {
+                const moveStep = e.shiftKey ? 2 : 0.5;
+
+                if (key === "arrowleft") selectedItem.position.x -= moveStep;
+                if (key === "arrowright") selectedItem.position.x += moveStep;
+                if (key === "arrowup") selectedItem.position.z -= moveStep;
+                if (key === "arrowdown") selectedItem.position.z += moveStep;
+                if (key === "pageup") selectedItem.position.y += moveStep;
+                if (key === "pagedown") selectedItem.position.y -= moveStep;
+                if (key === "r") selectedItem.rotation.y += 0.08;
+                if (key === "f") selectedItem.rotation.y -= 0.08;
+                if (key === "+" || key === "=") selectedItem.scale.multiplyScalar(1.05);
+                if (key === "-" || key === "_") selectedItem.scale.multiplyScalar(0.95);
+                if (key === "g") snapSelectedToTerrain();
+
+                selectedItem.updateMatrixWorld(true);
+                selectionBox.setFromObject(selectedItem);
+            }
+
             if (key === "p") exportLayoutJSON();
+
+            if ([
+                "arrowleft","arrowright","arrowup","arrowdown",
+                "pageup","pagedown","r","f","+","=","-","_","g","p"
+            ].includes(key)) {
+                e.preventDefault();
+            }
 
             refreshEditorPanel();
             return;
