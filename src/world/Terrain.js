@@ -45,24 +45,51 @@ function loadPBRMaterial(basePath, fallbackColor, repeatX, repeatY, options = {}
     return material;
 }
 
-export function terrainHeight(x, z) {
-    const base =
-        Math.sin(x * 0.032) * 2.4 +
-        Math.sin(z * 0.041) * 2.1 +
-        Math.sin((x + z) * 0.017) * 3.2 +
-        Math.cos((x - z) * 0.021) * 2.0;
-
-    const sideRidge = Math.pow(Math.max(0, Math.abs(x) - 28) / 60, 1.65) * 28;
-    const farMountains = Math.pow(Math.max(0, -z - 45) / 70, 1.45) * 38;
-
-    const roadCenter = Math.sin(z * 0.028) * 9 + Math.sin(z * 0.011) * 5;
-    const roadDist = Math.abs(x - roadCenter);
-    const valleyFlatten = THREE.MathUtils.clamp(roadDist / 20, 0.2, 1);
-
-    return (base + sideRidge + farMountains) * valleyFlatten;
+export function roadCenter(z) {
+    return Math.sin(z * 0.026) * 10 + Math.sin(z * 0.0105) * 6;
 }
 
-function makeRoadGeometry(points, width = 9) {
+export function riverCenter(z) {
+    return 27 + Math.sin(z * 0.020) * 13 + Math.sin(z * 0.0085) * 8;
+}
+
+export function terrainHeight(x, z) {
+    const rolling =
+        Math.sin(x * 0.028) * 2.3 +
+        Math.sin(z * 0.038) * 2.0 +
+        Math.sin((x + z) * 0.015) * 3.0 +
+        Math.cos((x - z) * 0.018) * 1.7;
+
+    // Build broad enclosing ridges rather than vertical walls.
+    const sideDistance = Math.max(0, Math.abs(x) - 34);
+    const sideRidge = Math.pow(sideDistance / 78, 1.75) * 34;
+
+    // Raise the horizon into the distant mountain basin.
+    const farDistance = Math.max(0, -z - 38);
+    const farMountains = Math.pow(farDistance / 88, 1.55) * 46;
+
+    const roadDist = Math.abs(x - roadCenter(z));
+    const roadBlend = THREE.MathUtils.smoothstep(roadDist, 5, 23);
+
+    let h = (rolling + sideRidge + farMountains) * (0.28 + roadBlend * 0.72);
+
+    // Carve the river into the valley so the water sits inside the world.
+    const rDist = Math.abs(x - riverCenter(z));
+    const riverCut = Math.exp(-(rDist * rDist) / 62) * 3.8;
+    h -= riverCut;
+
+    // Create a waterfall shelf on the left-center side.
+    const shelf =
+        THREE.MathUtils.smoothstep(x, -62, -34) *
+        (1 - THREE.MathUtils.smoothstep(x, -34, -18)) *
+        THREE.MathUtils.smoothstep(z, -52, -20) *
+        (1 - THREE.MathUtils.smoothstep(z, -20, 4));
+    h += shelf * 10;
+
+    return h;
+}
+
+function makeRoadGeometry(points, width = 12) {
     const positions = [];
     const uvs = [];
     const indices = [];
@@ -74,53 +101,71 @@ function makeRoadGeometry(points, width = 9) {
         const tangent = new THREE.Vector2(next.x - prev.x, next.z - prev.z).normalize();
         const normal = new THREE.Vector2(-tangent.y, tangent.x);
 
-        const left = new THREE.Vector3(
-            p.x + normal.x * width * 0.5,
-            terrainHeight(p.x, p.z) + 0.16,
-            p.z + normal.y * width * 0.5
-        );
-        const right = new THREE.Vector3(
-            p.x - normal.x * width * 0.5,
-            terrainHeight(p.x, p.z) + 0.16,
-            p.z - normal.y * width * 0.5
+        const leftX = p.x + normal.x * width * 0.5;
+        const leftZ = p.z + normal.y * width * 0.5;
+        const rightX = p.x - normal.x * width * 0.5;
+        const rightZ = p.z - normal.y * width * 0.5;
+
+        positions.push(
+            leftX, terrainHeight(leftX, leftZ) + 0.18, leftZ,
+            rightX, terrainHeight(rightX, rightZ) + 0.18, rightZ
         );
 
-        positions.push(left.x,left.y,left.z,right.x,right.y,right.z);
         const v = i / (points.length - 1);
-        uvs.push(0,v*18,1,v*18);
+        uvs.push(0, v * 22, 1, v * 22);
 
         if (i < points.length - 1) {
-            const a=i*2,b=a+1,c=a+2,d=a+3;
-            indices.push(a,c,b,b,c,d);
+            const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+            indices.push(a, c, b, b, c, d);
         }
     }
 
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
-    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs,2));
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return enableAO(geo);
+}
+
+function makeIrregularPeak(radius, height, segments = 10) {
+    const geo = new THREE.ConeGeometry(radius, height, segments, 8);
+    const pos = geo.attributes.position;
+
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        const radial = Math.hypot(x, z);
+        const wobble =
+            1 +
+            Math.sin(x * 0.37 + z * 0.19) * 0.07 +
+            Math.cos(z * 0.31 - x * 0.12) * 0.06;
+
+        if (radial > 0.01 && y < height * 0.45) {
+            pos.setX(i, x * wobble);
+            pos.setZ(i, z * wobble);
+        }
+    }
+
     geo.computeVertexNormals();
     return enableAO(geo);
 }
 
 function addMountainCluster(group, material, cx, cz, count, radius, heightScale) {
     for (let i = 0; i < count; i++) {
-        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-        const r = radius * (0.35 + Math.random() * 0.7);
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.65;
+        const r = radius * (0.25 + Math.random() * 0.85);
         const x = cx + Math.cos(angle) * r;
         const z = cz + Math.sin(angle) * r;
-
-        const geo = enableAO(new THREE.ConeGeometry(
-            10 + Math.random()*12,
-            heightScale * (0.65 + Math.random()*0.7),
-            7 + Math.floor(Math.random()*3),
-            5
-        ));
+        const h = heightScale * (0.7 + Math.random() * 0.7);
+        const geo = makeIrregularPeak(9 + Math.random() * 15, h, 8 + Math.floor(Math.random() * 4));
         const mesh = new THREE.Mesh(geo, material);
-        mesh.position.set(x, terrainHeight(x,z) + mesh.geometry.parameters.height/2 - 3, z);
-        mesh.rotation.y = Math.random()*Math.PI;
-        mesh.scale.x *= 0.8 + Math.random()*0.6;
-        mesh.scale.z *= 0.8 + Math.random()*0.6;
+
+        mesh.position.set(x, terrainHeight(x, z) + h * 0.48 - 2.5, z);
+        mesh.rotation.y = Math.random() * Math.PI;
+        mesh.scale.x *= 0.85 + Math.random() * 0.55;
+        mesh.scale.z *= 0.85 + Math.random() * 0.55;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         group.add(mesh);
@@ -131,49 +176,53 @@ export function createTerrain() {
     const group = new THREE.Group();
     group.name = "BrokenRidgeTerrain";
 
-    const grassMaterial = loadPBRMaterial("/assets/materials/grass_meadow", 0x58743a, 34,34,{bumpScale:0.28});
-    const dirtMaterial = loadPBRMaterial("/assets/materials/dirt_road", 0x7a5b38, 5,24,{bumpScale:0.4});
-    const cliffMaterial = loadPBRMaterial("/assets/materials/cliff_rock", 0x686158, 7,9,{bumpScale:1.0});
-    const mountainMaterial = loadPBRMaterial("/assets/materials/mountain_rock", 0x5f5c58, 8,10,{bumpScale:1.15});
-    const snowMaterial = loadPBRMaterial("/assets/materials/snow", 0xeaf0f5, 8,8,{roughness:0.78,bumpScale:0.35});
+    const grassMaterial = loadPBRMaterial("/assets/materials/grass_meadow", 0x58743a, 38, 38, { bumpScale: 0.24 });
+    const dirtMaterial = loadPBRMaterial("/assets/materials/dirt_road", 0x7a5b38, 6, 28, { bumpScale: 0.38 });
+    const cliffMaterial = loadPBRMaterial("/assets/materials/cliff_rock", 0x686158, 8, 10, { bumpScale: 0.95 });
+    const mountainMaterial = loadPBRMaterial("/assets/materials/mountain_rock", 0x5f5c58, 9, 11, { bumpScale: 1.05 });
+    const snowMaterial = loadPBRMaterial("/assets/materials/snow", 0xeaf0f5, 8, 8, { roughness: 0.78, bumpScale: 0.3 });
 
-    const size = 320;
-    const geo = enableAO(new THREE.PlaneGeometry(size,size,220,220));
+    const size = 360;
+    const geo = enableAO(new THREE.PlaneGeometry(size, size, 240, 240));
     const pos = geo.attributes.position;
 
-    for (let i=0;i<pos.count;i++) {
-        const x=pos.getX(i), z=pos.getY(i);
-        pos.setZ(i, terrainHeight(x,z));
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getY(i);
+        pos.setZ(i, terrainHeight(x, z));
     }
     geo.computeVertexNormals();
 
     const ground = new THREE.Mesh(geo, grassMaterial);
-    ground.rotation.x = -Math.PI/2;
+    ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     group.add(ground);
 
-    const roadPoints=[];
-    for (let z=135; z>=-120; z-=5) {
-        roadPoints.push({
-            x: Math.sin(z*0.028)*9 + Math.sin(z*0.011)*5,
-            z
-        });
+    const roadPoints = [];
+    for (let z = 145; z >= -135; z -= 4) {
+        roadPoints.push({ x: roadCenter(z), z });
     }
-    const road = new THREE.Mesh(makeRoadGeometry(roadPoints, 10), dirtMaterial);
+    const road = new THREE.Mesh(makeRoadGeometry(roadPoints, 13), dirtMaterial);
     road.receiveShadow = true;
     group.add(road);
 
-    addMountainCluster(group, mountainMaterial, -108,-95, 7, 38, 62);
-    addMountainCluster(group, mountainMaterial, 110,-100, 7, 42, 68);
-    addMountainCluster(group, cliffMaterial, -120,10, 5, 28, 40);
-    addMountainCluster(group, cliffMaterial, 118,20, 5, 28, 42);
+    // Monumental distant basin.
+    addMountainCluster(group, mountainMaterial, -120, -118, 8, 44, 72);
+    addMountainCluster(group, mountainMaterial, 122, -122, 8, 46, 78);
+    addMountainCluster(group, cliffMaterial, -132, 8, 5, 30, 46);
+    addMountainCluster(group, cliffMaterial, 132, 15, 5, 32, 48);
 
-    // snow caps on far peaks
-    const snowSpecs=[[-112,46,-108,28],[-78,40,-132,24],[108,48,-118,30],[72,42,-138,22]];
-    for (const [x,y,z,r] of snowSpecs) {
-        const s = new THREE.Mesh(enableAO(new THREE.CircleGeometry(r,48)), snowMaterial);
-        s.rotation.x=-Math.PI/2;
-        s.position.set(x,y,z);
+    // Snow caps for the most distant peaks.
+    const snowSpecs = [
+        [-124, 54, -128, 30],
+        [-88, 48, -150, 26],
+        [118, 58, -136, 32],
+        [78, 50, -154, 25]
+    ];
+    for (const [x, y, z, r] of snowSpecs) {
+        const s = new THREE.Mesh(enableAO(new THREE.CircleGeometry(r, 56)), snowMaterial);
+        s.rotation.x = -Math.PI / 2;
+        s.position.set(x, y, z);
         group.add(s);
     }
 
