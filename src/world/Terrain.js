@@ -162,12 +162,32 @@ function addMountainCluster(group, material, cx, cz, count, radius, heightScale)
         const geo = makeIrregularPeak(9 + Math.random() * 15, h, 8 + Math.floor(Math.random() * 4));
         const mesh = new THREE.Mesh(geo, material);
 
-        geo.computeBoundingBox();
-        const baseY = geo.boundingBox?.min.y ?? (-h * 0.5);
-        mesh.position.set(x, terrainHeight(x, z) - baseY, z);
         mesh.rotation.y = Math.random() * Math.PI;
         mesh.scale.x *= 0.85 + Math.random() * 0.55;
         mesh.scale.z *= 0.85 + Math.random() * 0.55;
+
+        mesh.position.set(x,0,z);
+        mesh.updateMatrixWorld(true);
+
+        const box=new THREE.Box3().setFromObject(mesh);
+        const baseRelative=box.min.y-mesh.position.y;
+
+        const heights=[];
+        const steps=8;
+        for (let ix=0;ix<=steps;ix++) {
+            const sx=THREE.MathUtils.lerp(box.min.x,box.max.x,ix/steps);
+            for (let iz=0;iz<=steps;iz++) {
+                const sz=THREE.MathUtils.lerp(box.min.z,box.max.z,iz/steps);
+                heights.push(terrainHeight(sx,sz));
+            }
+        }
+
+        heights.sort((a,b)=>a-b);
+        const groundY=heights[Math.floor(heights.length*0.08)];
+
+        // Sink mountain foundations slightly into the sampled terrain so
+        // their wide bases cannot hover above downhill portions of a slope.
+        mesh.position.y=groundY-baseRelative-2.0;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         group.add(mesh);
