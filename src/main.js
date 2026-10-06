@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import "./style.css";
+import { createTerrain } from "./world/Terrain.js";
 
 // =====================================================
 // SCENE
@@ -69,127 +70,12 @@ sun.castShadow = true;
 scene.add(sun);
 
 // =====================================================
-// TERRAIN TEXTURE
+// 3D TERRAIN
 // =====================================================
 
-const loader = new THREE.TextureLoader();
-
-const terrainTexture = loader.load(
-    "/assets/maps/broken_ridge_map.png"
-);
-
-terrainTexture.colorSpace =
-    THREE.SRGBColorSpace;
-
-// =====================================================
-// TERRAIN
-// =====================================================
-
-const TERRAIN_SIZE = 220;
-
-const geometry =
-    new THREE.PlaneGeometry(
-        TERRAIN_SIZE,
-        TERRAIN_SIZE,
-        180,
-        180
-    );
-
-const positions =
-    geometry.attributes.position;
-
-// -----------------------------------------------------
-// PROCEDURAL HEIGHT
-// -----------------------------------------------------
-
-for (
-    let i = 0;
-    i < positions.count;
-    i++
-) {
-
-    const x =
-        positions.getX(i);
-
-    const y =
-        positions.getY(i);
-
-    // valley center
-    const valley =
-        Math.abs(x) / 15;
-
-    // mountain noise
-    let height =
-        Math.sin(x * 0.055) * 3 +
-        Math.cos(y * 0.045) * 3 +
-        Math.sin(
-            (x + y) * 0.025
-        ) * 4;
-
-    // mountains grow toward sides
-    height +=
-        Math.pow(
-            Math.abs(x) / 35,
-            2
-        ) * 16;
-
-    // extra distant elevation
-    height +=
-        Math.max(
-            0,
-            (-y - 25) / 10
-        ) * 2;
-
-    // flatten central road
-    if (
-        Math.abs(x) < 8
-    ) {
-
-        height *= 0.15;
-    }
-
-    positions.setZ(
-        i,
-        height
-    );
-}
-
-geometry.computeVertexNormals();
-
-// =====================================================
-// TERRAIN MATERIAL
-// =====================================================
-
-const material =
-    new THREE.MeshStandardMaterial({
-
-        map:
-            terrainTexture,
-
-        roughness:
-            0.95,
-
-        metalness:
-            0
-    });
-
-// =====================================================
-// TERRAIN MESH
-// =====================================================
-
-const terrain =
-    new THREE.Mesh(
-        geometry,
-        material
-    );
-
-terrain.rotation.x =
-    -Math.PI / 2;
-
-terrain.receiveShadow =
-    true;
-
+const terrain = createTerrain();
 scene.add(terrain);
+
 
 // =====================================================
 // PLAYER
