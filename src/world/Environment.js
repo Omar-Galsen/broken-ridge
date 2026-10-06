@@ -2,6 +2,15 @@ import * as THREE from "three";
 import { terrainHeight, roadCenter } from "./Terrain.js";
 
 const loader = new THREE.TextureLoader();
+let editableId = 0;
+
+function markEditable(object,type) {
+    object.userData.editable = true;
+    object.userData.itemType = type;
+    object.userData.itemId = `${type}-${String(++editableId).padStart(4,"0")}`;
+    object.name = object.userData.itemId;
+    return object;
+}
 
 function configureTexture(texture, repeatX, repeatY, srgb=false) {
     texture.wrapS=THREE.RepeatWrapping;
@@ -140,6 +149,7 @@ function addRockCluster(group, material, cx, cz, count, spread) {
         rock.scale.set(0.75+Math.random()*1.7,0.55+Math.random()*1.05,0.7+Math.random()*1.6);
         rock.rotation.set(Math.random()*1.4,Math.random()*Math.PI,Math.random()*1.4);
         placeGrounded(rock,x,z,-0.35,"rock");
+        markEditable(rock,"rock");
         rock.castShadow=true;
         rock.receiveShadow=true;
         group.add(rock);
@@ -252,6 +262,7 @@ function createFenceLine(group, woodMaterial, z, side, count=8, spacing=6) {
         );
         post.position.set(xx, terrainHeight(xx,zz)+1.1, zz);
         post.castShadow = true;
+        markEditable(post,"fence-post");
         group.add(post);
 
         if (i < count-1) {
@@ -265,6 +276,7 @@ function createFenceLine(group, woodMaterial, z, side, count=8, spacing=6) {
             rail.position.set((xx+nextX)/2, terrainHeight((xx+nextX)/2,(zz+nextZ)/2)+1.3, (zz+nextZ)/2);
             rail.rotation.y = -Math.atan2(nextZ-zz,nextX-xx);
             rail.castShadow = true;
+            markEditable(rail,"fence-rail");
             group.add(rail);
         }
     }
@@ -276,6 +288,7 @@ function createTorch(group, x, z) {
         new THREE.MeshStandardMaterial({color:0x3b2a1a,roughness:0.95})
     );
     pole.position.set(x,terrainHeight(x,z)+1.2,z);
+    markEditable(pole,"torch");
     group.add(pole);
 
     const flame = new THREE.Mesh(
@@ -315,6 +328,7 @@ export function createEnvironment() {
         const t=createPine(bark,needles,scale);
         t.rotation.y=Math.random()*Math.PI*2;
         placeGrounded(t,x,z,-0.08,"pine");
+        markEditable(t,"pine");
         group.add(t);
     }
 
@@ -336,6 +350,7 @@ export function createEnvironment() {
         const a=createRuinedArch(stone,moss,s);
         a.rotation.y=r;
         placeGrounded(a,x,z,-0.35,"ruin");
+        markEditable(a,"ruin");
         group.add(a);
     }
 
@@ -348,6 +363,7 @@ export function createEnvironment() {
     ]) {
         const tower=createWatchTower(stone,s);
         placeGrounded(tower,x,z,-0.55,"watchtower");
+        markEditable(tower,"watchtower");
         group.add(tower);
     }
 
@@ -355,6 +371,7 @@ export function createEnvironment() {
     const bridge=createBridge(stone,1.15);
     bridge.rotation.y=0.1;
     placeGrounded(bridge,24,-18,-0.45,"bridge");
+    markEditable(bridge,"bridge");
     group.add(bridge);
 
     // Roadside composition: fences, torches, and landmark rhythm.
@@ -371,6 +388,7 @@ export function createEnvironment() {
     const gate=createAncientGate(stone,moss,0.92);
     gate.rotation.y=0.02;
     placeGrounded(gate,roadCenter(-152),-152,-0.65,"ancient-gate");
+    markEditable(gate,"ancient-gate");
     group.add(gate);
 
     return group;
