@@ -45,6 +45,19 @@ function loadPBRMaterial(basePath,fallbackColor,repeatX=4,repeatY=4,options={}) 
     return mat;
 }
 
+
+function placeGrounded(object,x,z,offset=0) {
+    object.position.set(x,0,z);
+    object.updateMatrixWorld(true);
+
+    const box=new THREE.Box3().setFromObject(object);
+    const baseRelative=box.min.y-object.position.y;
+
+    object.position.y=terrainHeight(x,z)+offset-baseRelative;
+    object.updateMatrixWorld(true);
+    return object;
+}
+
 function createPine(bark, needles, scale=1) {
     const g=new THREE.Group();
 
@@ -84,9 +97,9 @@ function addRockCluster(group, material, cx, cz, count, spread) {
         const z=cz+(Math.random()-0.5)*spread;
         const r=0.9+Math.random()*3.2;
         const rock=new THREE.Mesh(enableAO(new THREE.DodecahedronGeometry(r,1)),material);
-        rock.position.set(x,terrainHeight(x,z)+r*0.5,z);
         rock.scale.set(0.75+Math.random()*1.7,0.55+Math.random()*1.05,0.7+Math.random()*1.6);
         rock.rotation.set(Math.random()*1.4,Math.random()*Math.PI,Math.random()*1.4);
+        placeGrounded(rock,x,z,-0.12);
         rock.castShadow=true;
         rock.receiveShadow=true;
         group.add(rock);
@@ -260,8 +273,8 @@ export function createEnvironment() {
 
         const scale=0.55+Math.random()*1.0;
         const t=createPine(bark,needles,scale);
-        t.position.set(x,terrainHeight(x,z),z);
         t.rotation.y=Math.random()*Math.PI*2;
+        placeGrounded(t,x,z);
         group.add(t);
     }
 
@@ -281,8 +294,8 @@ export function createEnvironment() {
     ];
     for (const [x,z,s,r] of ruins) {
         const a=createRuinedArch(stone,moss,s);
-        a.position.set(x,terrainHeight(x,z),z);
         a.rotation.y=r;
+        placeGrounded(a,x,z,-0.05);
         group.add(a);
     }
 
@@ -294,14 +307,14 @@ export function createEnvironment() {
         [46,-116,1.4]
     ]) {
         const tower=createWatchTower(stone,s);
-        tower.position.set(x,terrainHeight(x,z),z);
+        placeGrounded(tower,x,z,-0.08);
         group.add(tower);
     }
 
     // Stone bridge crossing the river corridor.
     const bridge=createBridge(stone,1.15);
-    bridge.position.set(24,terrainHeight(24,-18)+0.8,-18);
     bridge.rotation.y=0.1;
+    placeGrounded(bridge,24,-18,-0.15);
     group.add(bridge);
 
     // Roadside composition: fences, torches, and landmark rhythm.
@@ -316,8 +329,8 @@ export function createEnvironment() {
 
     // Monumental ancient gate / castle destination.
     const gate=createAncientGate(stone,moss,0.92);
-    gate.position.set(roadCenter(-152),terrainHeight(roadCenter(-152),-152),-152);
     gate.rotation.y=0.02;
+    placeGrounded(gate,roadCenter(-152),-152,-0.08);
     group.add(gate);
 
     return group;
