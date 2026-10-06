@@ -1,154 +1,114 @@
 import * as THREE from "three";
+import { terrainHeight } from "./Terrain.js";
 
-const loader = new THREE.TextureLoader();
+const loader=new THREE.TextureLoader();
 
-function configureTexture(texture, repeatX, repeatY, srgb = false) {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(repeatX, repeatY);
-    if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+function configureTexture(texture,rx,ry,srgb=false) {
+    texture.wrapS=THREE.RepeatWrapping;
+    texture.wrapT=THREE.RepeatWrapping;
+    texture.repeat.set(rx,ry);
+    if (srgb) texture.colorSpace=THREE.SRGBColorSpace;
     return texture;
 }
 
-function loadWaterMaterial(basePath, fallbackColor, repeatX, repeatY, options = {}) {
-    const material = new THREE.MeshStandardMaterial({
-        color: fallbackColor,
-        transparent: true,
-        opacity: options.opacity ?? 0.82,
-        roughness: options.roughness ?? 0.25,
-        metalness: 0,
-        depthWrite: true,
-        side: THREE.DoubleSide
+function loadWaterMaterial(basePath,fallbackColor,rx,ry,options={}) {
+    const name=basePath.split("/").filter(Boolean).pop();
+    const mat=new THREE.MeshStandardMaterial({
+        color:fallbackColor,
+        transparent:true,
+        opacity:options.opacity ?? 0.78,
+        roughness:options.roughness ?? 0.22,
+        metalness:0,
+        side:THREE.DoubleSide,
+        depthWrite:false
     });
-
-    const name = basePath.split("/").filter(Boolean).pop();
-
-    const definitions = [
-        ["map", "albedo", true],
-        ["normalMap", "normal", false],
-        ["roughnessMap", "roughness", false],
-        ["aoMap", "ao", false],
-        ["bumpMap", "height", false]
-    ];
-
-    for (const [slot, suffix, srgb] of definitions) {
-        const path = `${basePath}/${name}_${suffix}.png`;
-
-        loader.load(
-            path,
-            (texture) => {
-                configureTexture(texture, repeatX, repeatY, srgb);
-                material[slot] = texture;
-                if (slot === "map") material.color.set(0xffffff);
-                if (slot === "bumpMap") material.bumpScale = options.bumpScale ?? 0.2;
-                material.needsUpdate = true;
-            },
-            undefined,
-            () => console.warn(`Water texture missing: ${path}`)
-        );
+    const defs=[["map","albedo",true],["normalMap","normal",false],["roughnessMap","roughness",false],["bumpMap","height",false]];
+    for (const [slot,suffix,srgb] of defs) {
+        loader.load(`${basePath}/${name}_${suffix}.png`,(tex)=>{
+            configureTexture(tex,rx,ry,srgb);
+            mat[slot]=tex;
+            if (slot==="map") mat.color.set(0xffffff);
+            if (slot==="bumpMap") mat.bumpScale=options.bumpScale ?? 0.12;
+            mat.needsUpdate=true;
+        });
     }
-
-    return material;
+    return mat;
 }
 
-function enableAO(geometry) {
-    if (!geometry.attributes.uv2 && geometry.attributes.uv) {
-        geometry.setAttribute(
-            "uv2",
-            new THREE.BufferAttribute(geometry.attributes.uv.array, 2)
-        );
+function buildRibbon(points,width,material,yOffset=0.22) {
+    const positions=[],uvs=[],indices=[];
+    for (let i=0;i<points.length;i++) {
+        const p=points[i];
+        const prev=points[Math.max(0,i-1)];
+        const next=points[Math.min(points.length-1,i+1)];
+        const tangent=new THREE.Vector2(next.x-prev.x,next.z-prev.z).normalize();
+        const n=new THREE.Vector2(-tangent.y,tangent.x);
+        const y=terrainHeight(p.x,p.z)+yOffset;
+        const l=new THREE.Vector3(p.x+n.x*width*0.5,y,p.z+n.y*width*0.5);
+        const r=new THREE.Vector3(p.x-n.x*width*0.5,y,p.z-n.y*width*0.5);
+        positions.push(l.x,l.y,l.z,r.x,r.y,r.z);
+        const v=i/(points.length-1);
+        uvs.push(0,v*14,1,v*14);
+        if (i<points.length-1) {
+            const a=i*2,b=a+1,c=a+2,d=a+3;
+            indices.push(a,c,b,b,c,d);
+        }
     }
-    return geometry;
+    const g=new THREE.BufferGeometry();
+    g.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+    g.setAttribute("uv",new THREE.Float32BufferAttribute(uvs,2));
+    g.setIndex(indices);
+    g.computeVertexNormals();
+    return new THREE.Mesh(g,material);
 }
 
 export function createWater() {
-    const group = new THREE.Group();
-    group.name = "BrokenRidgeWater";
+    const group=new THREE.Group();
+    group.name="BrokenRidgeWater";
 
-    const riverMaterial = loadWaterMaterial(
-        "/assets/materials/river_water",
-        0x2e8ea6,
-        5,
-        28,
-        { opacity: 0.78, roughness: 0.18, bumpScale: 0.16 }
-    );
+    const riverMat=loadWaterMaterial("/assets/materials/river_water",0x2e8ea6,4,20,{opacity:0.74,roughness:0.16,bumpScale:0.12});
+    const fallMat=loadWaterMaterial("/assets/materials/waterfall_foam",0xdff6ff,2,6,{opacity:0.88,roughness:0.3,bumpScale:0.09});
 
-    const waterfallMaterial = loadWaterMaterial(
-        "/assets/materials/waterfall_foam",
-        0xd8f3ff,
-        3,
-        7,
-        { opacity: 0.9, roughness: 0.3, bumpScale: 0.12 }
-    );
-
-    // Main river, offset from the central road so both remain visible.
-    const riverGeometry = enableAO(
-        new THREE.PlaneGeometry(12, 160, 10, 80)
-    );
-    const river = new THREE.Mesh(riverGeometry, riverMaterial);
-    river.rotation.x = -Math.PI / 2;
-    river.position.set(18, 0.12, -16);
-    river.rotation.z = -0.07;
-    river.receiveShadow = true;
+    const riverPoints=[];
+    for (let z=125; z>=-105; z-=5) {
+        riverPoints.push({
+            x: 26 + Math.sin(z*0.021)*12 + Math.sin(z*0.009)*8,
+            z
+        });
+    }
+    const river=buildRibbon(riverPoints,11,riverMat,0.20);
+    river.receiveShadow=true;
     group.add(river);
 
-    // Secondary stream crossing the valley.
-    const streamGeometry = enableAO(
-        new THREE.PlaneGeometry(7, 72, 6, 40)
-    );
-    const stream = new THREE.Mesh(streamGeometry, riverMaterial.clone());
-    stream.rotation.x = -Math.PI / 2;
-    stream.rotation.z = Math.PI / 2.65;
-    stream.position.set(-14, 0.13, -26);
+    const streamPoints=[];
+    for (let i=0;i<=18;i++) {
+        const t=i/18;
+        const z=20 - t*65;
+        const x=-58 + t*60 + Math.sin(t*Math.PI*2)*6;
+        streamPoints.push({x,z});
+    }
+    const streamMat=riverMat.clone();
+    const stream=buildRibbon(streamPoints,6.5,streamMat,0.21);
     group.add(stream);
 
-    // Waterfall sheet.
-    const waterfallGeometry = enableAO(
-        new THREE.PlaneGeometry(10, 18, 10, 20)
-    );
-    const waterfall = new THREE.Mesh(
-        waterfallGeometry,
-        waterfallMaterial
-    );
-    waterfall.position.set(-34, 10, -38);
-    waterfall.rotation.y = Math.PI / 2.1;
-    waterfall.castShadow = false;
-    group.add(waterfall);
-
-    // Pool at waterfall base.
-    const poolGeometry = enableAO(
-        new THREE.CircleGeometry(9, 48)
-    );
-    const pool = new THREE.Mesh(
-        poolGeometry,
-        riverMaterial.clone()
-    );
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.set(-29, 0.16, -38);
+    const poolMat=riverMat.clone();
+    const pool=new THREE.Mesh(new THREE.CircleGeometry(11,64),poolMat);
+    pool.rotation.x=-Math.PI/2;
+    pool.position.set(-34,terrainHeight(-34,-35)+0.24,-35);
     group.add(pool);
+
+    const waterfall=new THREE.Mesh(new THREE.PlaneGeometry(9,17,8,20),fallMat);
+    waterfall.position.set(-42,terrainHeight(-42,-35)+8.4,-35);
+    waterfall.rotation.y=Math.PI/2;
+    group.add(waterfall);
 
     return {
         group,
         update(delta) {
-            const riverMaps = [
-                river.material.map,
-                river.material.normalMap,
-                stream.material.map,
-                stream.material.normalMap
-            ].filter(Boolean);
-
-            for (const texture of riverMaps) {
-                texture.offset.y -= delta * 0.035;
-            }
-
-            const fallMaps = [
-                waterfall.material.map,
-                waterfall.material.normalMap
-            ].filter(Boolean);
-
-            for (const texture of fallMaps) {
-                texture.offset.y -= delta * 0.22;
-            }
+            const riverTextures=[river.material.map,river.material.normalMap,stream.material.map,stream.material.normalMap].filter(Boolean);
+            for (const tex of riverTextures) tex.offset.y-=delta*0.025;
+            const fallTextures=[waterfall.material.map,waterfall.material.normalMap].filter(Boolean);
+            for (const tex of fallTextures) tex.offset.y-=delta*0.18;
         }
     };
 }
