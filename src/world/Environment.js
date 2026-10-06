@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { terrainHeight } from "./Terrain.js";
+import { terrainHeight, roadCenter } from "./Terrain.js";
 
 const loader = new THREE.TextureLoader();
 
@@ -49,23 +49,29 @@ function createPine(bark, needles, scale=1) {
     const g=new THREE.Group();
 
     const trunk=new THREE.Mesh(
-        enableAO(new THREE.CylinderGeometry(0.24*scale,0.44*scale,6.2*scale,9)),
+        enableAO(new THREE.CylinderGeometry(0.23*scale,0.46*scale,7.1*scale,10)),
         bark
     );
-    trunk.position.y=3.1*scale;
+    trunk.position.y=3.55*scale;
     trunk.castShadow=true;
     g.add(trunk);
 
     const tiers=[
-        [2.35,3.7,4.3],
-        [2.05,3.3,5.6],
-        [1.72,2.8,6.8],
-        [1.32,2.3,7.9],
-        [0.9,1.7,8.8]
+        [2.8,4.0,4.5],
+        [2.45,3.7,5.9],
+        [2.05,3.25,7.15],
+        [1.65,2.8,8.3],
+        [1.2,2.2,9.25],
+        [0.75,1.5,10.05]
     ];
-    for (const [r,h,y] of tiers) {
-        const m=new THREE.Mesh(enableAO(new THREE.ConeGeometry(r*scale,h*scale,12)),needles);
+
+    for (let i=0;i<tiers.length;i++) {
+        const [r,h,y]=tiers[i];
+        const m=new THREE.Mesh(enableAO(new THREE.ConeGeometry(r*scale,h*scale,14)),needles);
         m.position.y=y*scale;
+        m.rotation.y=i*0.53;
+        m.scale.x*=0.92+Math.random()*0.16;
+        m.scale.z*=0.92+Math.random()*0.16;
         m.castShadow=true;
         g.add(m);
     }
@@ -76,11 +82,11 @@ function addRockCluster(group, material, cx, cz, count, spread) {
     for (let i=0;i<count;i++) {
         const x=cx+(Math.random()-0.5)*spread;
         const z=cz+(Math.random()-0.5)*spread;
-        const r=0.8+Math.random()*2.8;
+        const r=0.9+Math.random()*3.2;
         const rock=new THREE.Mesh(enableAO(new THREE.DodecahedronGeometry(r,1)),material);
-        rock.position.set(x,terrainHeight(x,z)+r*0.45,z);
-        rock.scale.set(0.7+Math.random()*1.7,0.55+Math.random()*1.0,0.7+Math.random()*1.5);
-        rock.rotation.set(Math.random()*1.3,Math.random()*Math.PI,Math.random()*1.3);
+        rock.position.set(x,terrainHeight(x,z)+r*0.5,z);
+        rock.scale.set(0.75+Math.random()*1.7,0.55+Math.random()*1.05,0.7+Math.random()*1.6);
+        rock.rotation.set(Math.random()*1.4,Math.random()*Math.PI,Math.random()*1.4);
         rock.castShadow=true;
         rock.receiveShadow=true;
         group.add(rock);
@@ -89,52 +95,95 @@ function addRockCluster(group, material, cx, cz, count, spread) {
 
 function createRuinedArch(stone,moss,scale=1) {
     const g=new THREE.Group();
-    const pillarGeo=enableAO(new THREE.BoxGeometry(1.4*scale,6.4*scale,1.7*scale));
-    const lintelGeo=enableAO(new THREE.BoxGeometry(5.5*scale,1.25*scale,1.7*scale));
+    const pillarGeo=enableAO(new THREE.BoxGeometry(1.6*scale,7.3*scale,2.0*scale));
+    const lintelGeo=enableAO(new THREE.BoxGeometry(6.5*scale,1.5*scale,2.0*scale));
+
     const left=new THREE.Mesh(pillarGeo,stone);
     const right=new THREE.Mesh(pillarGeo.clone(),stone);
     const top=new THREE.Mesh(lintelGeo,stone);
-    left.position.set(-2.0*scale,3.2*scale,0);
-    right.position.set(2.0*scale,3.2*scale,0);
-    top.position.set(0,6.0*scale,0);
-    for (const m of [left,right,top]) { m.castShadow=true; m.receiveShadow=true; g.add(m); }
 
-    const mossCap=new THREE.Mesh(enableAO(new THREE.BoxGeometry(5.6*scale,0.18*scale,1.85*scale)),moss);
-    mossCap.position.set(0,6.7*scale,0);
+    left.position.set(-2.35*scale,3.65*scale,0);
+    right.position.set(2.35*scale,3.65*scale,0);
+    top.position.set(0,6.85*scale,0);
+
+    for (const m of [left,right,top]) {
+        m.castShadow=true;
+        m.receiveShadow=true;
+        g.add(m);
+    }
+
+    const mossCap=new THREE.Mesh(enableAO(new THREE.BoxGeometry(6.7*scale,0.2*scale,2.15*scale)),moss);
+    mossCap.position.set(0,7.65*scale,0);
     g.add(mossCap);
+
     return g;
 }
 
 function createWatchTower(stone,scale=1) {
     const g=new THREE.Group();
-    const body=new THREE.Mesh(enableAO(new THREE.CylinderGeometry(2.1*scale,2.6*scale,10*scale,8)),stone);
-    body.position.y=5*scale;
+
+    const body=new THREE.Mesh(enableAO(new THREE.CylinderGeometry(2.6*scale,3.2*scale,13*scale,10)),stone);
+    body.position.y=6.5*scale;
     body.castShadow=true;
     body.receiveShadow=true;
     g.add(body);
 
-    const crown=new THREE.Mesh(enableAO(new THREE.CylinderGeometry(2.7*scale,2.3*scale,2*scale,8)),stone);
-    crown.position.y=10.7*scale;
+    const crown=new THREE.Mesh(enableAO(new THREE.CylinderGeometry(3.45*scale,2.9*scale,2.3*scale,10)),stone);
+    crown.position.y=13.3*scale;
     crown.castShadow=true;
     g.add(crown);
+
     return g;
 }
 
 function createBridge(stone,scale=1) {
     const g=new THREE.Group();
-    const deck=new THREE.Mesh(enableAO(new THREE.BoxGeometry(14*scale,1.0*scale,4.2*scale)),stone);
-    deck.position.y=5.0*scale;
+
+    const deck=new THREE.Mesh(enableAO(new THREE.BoxGeometry(18*scale,1.2*scale,5.5*scale)),stone);
+    deck.position.y=6.0*scale;
     deck.castShadow=true;
     deck.receiveShadow=true;
     g.add(deck);
 
-    for (const x of [-5,0,5]) {
-        const p=new THREE.Mesh(enableAO(new THREE.BoxGeometry(1.3*scale,5.2*scale,4.2*scale)),stone);
-        p.position.set(x*scale,2.6*scale,0);
+    for (const x of [-6.5,0,6.5]) {
+        const p=new THREE.Mesh(enableAO(new THREE.BoxGeometry(1.5*scale,6.2*scale,5.5*scale)),stone);
+        p.position.set(x*scale,3.1*scale,0);
         p.castShadow=true;
         p.receiveShadow=true;
         g.add(p);
     }
+
+    return g;
+}
+
+function createAncientGate(stone,moss,scale=1) {
+    const g=new THREE.Group();
+
+    const leftTower=createWatchTower(stone,1.2*scale);
+    leftTower.position.x=-7.5*scale;
+    g.add(leftTower);
+
+    const rightTower=createWatchTower(stone,1.2*scale);
+    rightTower.position.x=7.5*scale;
+    g.add(rightTower);
+
+    const arch=createRuinedArch(stone,moss,1.75*scale);
+    arch.position.y=0.4*scale;
+    g.add(arch);
+
+    const wallMat=stone;
+    const wallLeft=new THREE.Mesh(enableAO(new THREE.BoxGeometry(11*scale,7*scale,2.2*scale)),wallMat);
+    wallLeft.position.set(-13*scale,3.5*scale,0);
+    wallLeft.castShadow=true;
+    wallLeft.receiveShadow=true;
+    g.add(wallLeft);
+
+    const wallRight=new THREE.Mesh(enableAO(new THREE.BoxGeometry(11*scale,7*scale,2.2*scale)),wallMat);
+    wallRight.position.set(13*scale,3.5*scale,0);
+    wallRight.castShadow=true;
+    wallRight.receiveShadow=true;
+    g.add(wallRight);
+
     return g;
 }
 
@@ -148,31 +197,36 @@ export function createEnvironment() {
     const moss=loadPBRMaterial("/assets/materials/moss",0x4f662d,5,5,{bumpScale:0.32});
     const rock=loadPBRMaterial("/assets/materials/rock_ground",0x6f6a63,5,5,{bumpScale:0.65});
 
-    // Dense forest bands, clear center valley.
-    for (let i=0;i<220;i++) {
-        let x=(Math.random()-0.5)*285;
-        let z=(Math.random()-0.5)*270;
-        const center=Math.sin(z*0.028)*9 + Math.sin(z*0.011)*5;
-        if (Math.abs(x-center)<24) continue;
-        if (Math.random()<0.22 && Math.abs(x)<55) continue;
+    // Dense forests at edges, scattered trees in the middle distance.
+    for (let i=0;i<320;i++) {
+        const x=(Math.random()-0.5)*330;
+        const z=(Math.random()-0.5)*300;
+        const center=roadCenter(z);
+        const dist=Math.abs(x-center);
 
-        const t=createPine(bark,needles,0.55+Math.random()*0.85);
+        if (dist<18) continue;
+        if (dist<42 && Math.random()<0.68) continue;
+
+        const scale=0.55+Math.random()*1.0;
+        const t=createPine(bark,needles,scale);
         t.position.set(x,terrainHeight(x,z),z);
         t.rotation.y=Math.random()*Math.PI*2;
         group.add(t);
     }
 
-    addRockCluster(group,rock,-45,35,18,38);
-    addRockCluster(group,rock,52,22,20,42);
-    addRockCluster(group,rock,-62,-35,18,34);
-    addRockCluster(group,rock,66,-48,20,36);
+    // Rock outcrops around the valley.
+    addRockCluster(group,rock,-52,38,26,46);
+    addRockCluster(group,rock,58,26,28,48);
+    addRockCluster(group,rock,-72,-34,24,42);
+    addRockCluster(group,rock,74,-50,26,44);
 
+    // Ruins along the road become larger landmarks.
     const ruins=[
-        [-17,44,0.95,0.15],
-        [19,23,1.05,-0.1],
-        [-15,-8,0.9,0.2],
-        [18,-31,1.1,-0.12],
-        [-17,-59,0.9,0.1]
+        [-22,48,1.15,0.15],
+        [24,26,1.3,-0.12],
+        [-20,-4,1.1,0.2],
+        [23,-34,1.35,-0.14],
+        [-19,-62,1.2,0.08]
     ];
     for (const [x,z,s,r] of ruins) {
         const a=createRuinedArch(stone,moss,s);
@@ -181,17 +235,29 @@ export function createEnvironment() {
         group.add(a);
     }
 
-    // Landmark towers and ancient gate line.
-    for (const [x,z,s] of [[-28,-78,0.9],[28,-82,1.0],[-42,-103,1.1],[40,-110,1.15]]) {
+    // Watchtowers frame the distant approach.
+    for (const [x,z,s] of [
+        [-34,-82,1.15],
+        [34,-88,1.25],
+        [-48,-108,1.3],
+        [46,-116,1.4]
+    ]) {
         const tower=createWatchTower(stone,s);
         tower.position.set(x,terrainHeight(x,z),z);
         group.add(tower);
     }
 
-    const bridge=createBridge(stone,1.0);
-    bridge.position.set(18,terrainHeight(18,-18)+0.6,-18);
-    bridge.rotation.y=0.12;
+    // Stone bridge crossing the river corridor.
+    const bridge=createBridge(stone,1.15);
+    bridge.position.set(24,terrainHeight(24,-18)+0.8,-18);
+    bridge.rotation.y=0.1;
     group.add(bridge);
+
+    // Monumental ancient gate / castle destination.
+    const gate=createAncientGate(stone,moss,1.35);
+    gate.position.set(roadCenter(-122),terrainHeight(roadCenter(-122),-122),-122);
+    gate.rotation.y=0.02;
+    group.add(gate);
 
     return group;
 }
