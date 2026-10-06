@@ -45,6 +45,30 @@ function loadWaterMaterial(basePath,fallbackColor,rx,ry,options={}) {
 function buildRibbon(points,width,material,yOffset=0.2) {
     const positions=[],uvs=[],indices=[];
 
+    // Build a smooth centerline height first. The previous version sampled
+    // each river bank independently, which could twist a river section into
+    // a near-vertical "sheet" whenever the terrain height differed sharply.
+    const rawHeights=points.map((p)=>terrainHeight(p.x,p.z)+yOffset);
+    const smoothHeights=rawHeights.map((h,i)=>{
+        const start=Math.max(0,i-2);
+        const end=Math.min(rawHeights.length-1,i+2);
+        let sum=0;
+        let count=0;
+        for (let j=start;j<=end;j++) {
+            sum+=rawHeights[j];
+            count++;
+        }
+        return sum/count;
+    });
+
+    for (let i=1;i<smoothHeights.length;i++) {
+        const maxStep=0.8;
+        const delta=smoothHeights[i]-smoothHeights[i-1];
+        if (Math.abs(delta)>maxStep) {
+            smoothHeights[i]=smoothHeights[i-1]+Math.sign(delta)*maxStep;
+        }
+    }
+
     for (let i=0;i<points.length;i++) {
         const p=points[i];
         const prev=points[Math.max(0,i-1)];
@@ -57,9 +81,13 @@ function buildRibbon(points,width,material,yOffset=0.2) {
         const rightX=p.x-n.x*width*0.5;
         const rightZ=p.z-n.y*width*0.5;
 
+        // Keep both river banks at the same Y so the surface stays horizontal
+        // across its width instead of becoming a standing plane.
+        const waterY=smoothHeights[i];
+
         positions.push(
-            leftX,terrainHeight(leftX,leftZ)+yOffset,leftZ,
-            rightX,terrainHeight(rightX,rightZ)+yOffset,rightZ
+            leftX,waterY,leftZ,
+            rightX,waterY,rightZ
         );
 
         const v=i/(points.length-1);
