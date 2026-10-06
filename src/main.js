@@ -98,7 +98,9 @@ const pointer = new THREE.Vector2();
 const transformControls = new TransformControls(camera, renderer.domElement);
 transformControls.setMode("translate");
 transformControls.setSize(0.8);
-scene.add(transformControls);
+
+const transformHelper = transformControls.getHelper();
+scene.add(transformHelper);
 
 transformControls.addEventListener("dragging-changed", (event) => {
     renderer.domElement.style.cursor = event.value ? "grabbing" : "crosshair";
@@ -121,6 +123,42 @@ editorPanel.style.cssText = [
     "white-space:pre"
 ].join(";");
 document.body.appendChild(editorPanel);
+
+const editorToggle = document.createElement("button");
+editorToggle.textContent = "Edit Map (E)";
+editorToggle.style.cssText = [
+    "position:fixed",
+    "top:12px",
+    "right:12px",
+    "z-index:1001",
+    "padding:9px 12px",
+    "border-radius:8px",
+    "border:1px solid rgba(255,255,255,.25)",
+    "background:rgba(10,12,16,.88)",
+    "color:#fff",
+    "font:13px monospace",
+    "cursor:pointer"
+].join(";");
+document.body.appendChild(editorToggle);
+
+function setEditMode(enabled) {
+    editMode = enabled;
+
+    if (!editMode) {
+        selectEditable(null);
+        renderer.domElement.style.cursor = "default";
+        editorToggle.textContent = "Edit Map (E)";
+    } else {
+        renderer.domElement.style.cursor = "crosshair";
+        editorToggle.textContent = "Exit Edit (E)";
+    }
+
+    refreshEditorPanel();
+}
+
+editorToggle.addEventListener("click", () => {
+    setEditMode(!editMode);
+});
 
 function refreshEditorPanel() {
     if (!editMode) {
@@ -348,16 +386,7 @@ window.addEventListener(
         const key = e.key.toLowerCase();
 
         if (key === "e") {
-            editMode = !editMode;
-
-            if (!editMode) {
-                selectEditable(null);
-                renderer.domElement.style.cursor = "default";
-            } else {
-                renderer.domElement.style.cursor = "crosshair";
-            }
-
-            refreshEditorPanel();
+            setEditMode(!editMode);
             return;
         }
 
