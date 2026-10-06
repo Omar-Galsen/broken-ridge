@@ -32,11 +32,14 @@ try {
     const res = await fetch(url);
     if (!res.ok) throw new Error("not ready");
   } catch {
-    vite = spawn(
-      process.platform === "win32" ? "npm.cmd" : "npm",
-      ["run", "dev", "--", "--host", "127.0.0.1"],
-      { stdio: "inherit" }
-    );
+    const command = process.platform === "win32"
+      ? ["cmd.exe", ["/d", "/s", "/c", "npm run dev -- --host 127.0.0.1"]]
+      : ["npm", ["run", "dev", "--", "--host", "127.0.0.1"]];
+
+    vite = spawn(command[0], command[1], {
+      stdio: "inherit",
+      shell: false
+    });
     await waitForServer(url);
   }
 
@@ -68,6 +71,13 @@ try {
   console.log(`Saved screenshot: ${outFile}`);
 } finally {
   if (vite) {
-    vite.kill();
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", String(vite.pid), "/t", "/f"], {
+        stdio: "ignore",
+        shell: false
+      });
+    } else {
+      vite.kill("SIGTERM");
+    }
   }
 }
