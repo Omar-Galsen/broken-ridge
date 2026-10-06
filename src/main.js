@@ -11,7 +11,7 @@ import { createWater } from "./world/Water.js";
 const scene = new THREE.Scene();
 
 scene.background = new THREE.Color(0x9bbbd0);
-scene.fog = new THREE.FogExp2(0x9bbbd0, 0.008);
+scene.fog = new THREE.FogExp2(0x9bbbd0, 0.0045);
 
 // =====================================================
 // CAMERA
@@ -24,7 +24,7 @@ const camera = new THREE.PerspectiveCamera(
     1500
 );
 
-camera.position.set(30, 35, 40);
+camera.position.set(34, 42, 48);
 
 // =====================================================
 // RENDERER
@@ -58,7 +58,7 @@ scene.add(hemi);
 
 const sun = new THREE.DirectionalLight(
     0xffe0ad,
-    3
+    2.3
 );
 
 sun.position.set(
@@ -228,9 +228,9 @@ function updatePlayer() {
 
 const cameraOffset =
     new THREE.Vector3(
-        16,
-        18,
-        20
+        20,
+        24,
+        26
     );
 
 function updateCamera() {
