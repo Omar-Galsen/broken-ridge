@@ -46,15 +46,55 @@ function loadPBRMaterial(basePath,fallbackColor,repeatX=4,repeatY=4,options={}) 
 }
 
 
-function placeGrounded(object,x,z,offset=0) {
+function placeGrounded(object,x,z,offset=0,label="object") {
     object.position.set(x,0,z);
     object.updateMatrixWorld(true);
 
     const box=new THREE.Box3().setFromObject(object);
     const baseRelative=box.min.y-object.position.y;
 
-    object.position.y=terrainHeight(x,z)+offset-baseRelative;
+    // Sample the ACTUAL terrain under the whole object's footprint rather
+    // than using only the center coordinate. This matters on hills, because
+    // terrainHeight(x,z) can vary a lot from one side of a tower/rock/gate
+    // to the other.
+    const samples=[];
+    const steps=6;
+
+    for (let ix=0;ix<=steps;ix++) {
+        const sx=THREE.MathUtils.lerp(box.min.x,box.max.x,ix/steps);
+
+        for (let iz=0;iz<=steps;iz++) {
+            const sz=THREE.MathUtils.lerp(box.min.z,box.max.z,iz/steps);
+            samples.push({
+                x:sx,
+                z:sz,
+                y:terrainHeight(sx,sz)
+            });
+        }
+    }
+
+    samples.sort((a,b)=>a.y-b.y);
+
+    // Put the object's base at the low side of the footprint. Any uneven
+    // ground on the high side then intersects the foundation slightly
+    // instead of leaving the whole structure visibly suspended in air.
+    const lowIndex=Math.floor(samples.length*0.12);
+    const ground=samples[lowIndex];
+
+    object.position.y=ground.y+offset-baseRelative;
     object.updateMatrixWorld(true);
+
+    object.userData.grounding={
+        label,
+        objectX:x,
+        objectZ:z,
+        terrainX:ground.x,
+        terrainZ:ground.z,
+        terrainY:ground.y,
+        baseRelative,
+        finalY:object.position.y
+    };
+
     return object;
 }
 
@@ -99,7 +139,7 @@ function addRockCluster(group, material, cx, cz, count, spread) {
         const rock=new THREE.Mesh(enableAO(new THREE.DodecahedronGeometry(r,1)),material);
         rock.scale.set(0.75+Math.random()*1.7,0.55+Math.random()*1.05,0.7+Math.random()*1.6);
         rock.rotation.set(Math.random()*1.4,Math.random()*Math.PI,Math.random()*1.4);
-        placeGrounded(rock,x,z,-0.12);
+        placeGrounded(rock,x,z,-0.35,"rock");
         rock.castShadow=true;
         rock.receiveShadow=true;
         group.add(rock);
@@ -274,7 +314,7 @@ export function createEnvironment() {
         const scale=0.55+Math.random()*1.0;
         const t=createPine(bark,needles,scale);
         t.rotation.y=Math.random()*Math.PI*2;
-        placeGrounded(t,x,z);
+        placeGrounded(t,x,z,-0.08,"pine");
         group.add(t);
     }
 
@@ -295,7 +335,7 @@ export function createEnvironment() {
     for (const [x,z,s,r] of ruins) {
         const a=createRuinedArch(stone,moss,s);
         a.rotation.y=r;
-        placeGrounded(a,x,z,-0.05);
+        placeGrounded(a,x,z,-0.35,"ruin");
         group.add(a);
     }
 
@@ -307,14 +347,14 @@ export function createEnvironment() {
         [46,-116,1.4]
     ]) {
         const tower=createWatchTower(stone,s);
-        placeGrounded(tower,x,z,-0.08);
+        placeGrounded(tower,x,z,-0.55,"watchtower");
         group.add(tower);
     }
 
     // Stone bridge crossing the river corridor.
     const bridge=createBridge(stone,1.15);
     bridge.rotation.y=0.1;
-    placeGrounded(bridge,24,-18,-0.15);
+    placeGrounded(bridge,24,-18,-0.45,"bridge");
     group.add(bridge);
 
     // Roadside composition: fences, torches, and landmark rhythm.
@@ -330,7 +370,7 @@ export function createEnvironment() {
     // Monumental ancient gate / castle destination.
     const gate=createAncientGate(stone,moss,0.92);
     gate.rotation.y=0.02;
-    placeGrounded(gate,roadCenter(-152),-152,-0.08);
+    placeGrounded(gate,roadCenter(-152),-152,-0.65,"ancient-gate");
     group.add(gate);
 
     return group;
